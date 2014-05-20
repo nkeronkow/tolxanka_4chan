@@ -10,11 +10,99 @@
 
 "use strict";
 
-// map global post numbers to local thread IDs.
-var idMap = new Object;
+var Thread = {
+    idMap: new Object,
+    thread: null,
+
+    modifyPost: function(postContainer, idx) {
+        var post = postContainer.querySelector("div.post");
+        var gid = getGlobalId(post);
+        this.idMap[gid] = idx;
+
+        rearrangeExistingElements(post);
+        addLinkBox(post, "postNo", idx);
+        addLinkBox(post, "replyTarget", "");
+        this.sanitizeQuoteLinks(post);
+    },
+
+    sanitizeQuoteLinks: function(post) {
+        var msg = post.querySelector("blockquote.postMessage");
+        var quoteLink = /<a href="#p(\d+)" class="quotelink">.*?<\/a>/;
+        var htmlWhitespace = /(?:\s*<br>\s*)*/;
+
+        var re = new RegExp(quoteLink.source + htmlWhitespace.source);
+        var match = msg.innerHTML.match(re);
+
+        if (match === null) {
+            return;
+        }
+
+        msg.innerHTML = msg.innerHTML.replace(match[0], "");
+        var target = post.querySelector("a.replyTarget");
+        target.textContent = this.idMap[match[1]];
+    },
+
+    // modify all posts in thread. if a summary tag is encountered, the index
+    // will skip ahead before doing all other posts after the first.
+    modifyStructure: function() {
+        demoteOp();
+        var posts = this.thread.querySelectorAll("div.postContainer");
+        var summary = this.thread.querySelector("span.summary");
+        var offset = 1;
+
+        this.modifyPost(posts[0], 1);
+
+        if (summary !== null) {
+            var summaryBlock = newSummaryBlock(summary.innerHTML);
+            posts[1].parentNode.insertBefore(summaryBlock, posts[1]);
+            this.thread.removeChild(summary);
+
+            var match = summary.textContent.match(/(\d+) posts?.*omitted./);
+            offset += match[1] | 0;
+        }
+
+        for (var i = 1; i < posts.length; i++) {
+            this.modifyPost(posts[i], i + offset);
+        }
+    },
+}
+
+function newThread(thread) {
+    var t = Object.create(Thread);
+    t.thread = thread;
+    return t;
+}
+
+function newSummaryBlock(content) {
+    var postContainer   = newElem("div",        "postContainer");
+    var post            = newElem("div",        "post");
+    var headerCol       = newElem("div",        "headerCol");
+    var postNo          = newElem("a",          "linkBox", "postNo");
+    var replyTarget     = newElem("a",          "linkBox", "replyTarget");
+    var commentBody     = newElem("div",        "commentBody");
+    var postMessage     = newElem("blockquote", "postMessage");
+    postContainer.classList.add("inlineSummary");
+    postContainer.appendChild(post);
+    post.appendChild(headerCol);
+    post.appendChild(postNo);
+    post.appendChild(replyTarget);
+    post.appendChild(commentBody);
+    commentBody.appendChild(postMessage);
+    postMessage.innerHTML = content;
+    return postContainer;
+}
+
+function newElem(type, className) {
+    var e = document.createElement(type);
+    for (var i = 1; i < arguments.length; i++) {
+        e.classList.add(arguments[i]);
+    }
+    return e;
+}
+
 
 function rearrangeExistingElements(post) {
-    var headerCol   = document.createElement("div");
+    var headerCol   = newElem("div", "headerCol");
     var postInfo    = post.querySelector("div.postInfo");
     var fileText    = post.querySelector("div.fileText");
     var fileThumb   = post.querySelector("a.fileThumb");
@@ -34,14 +122,12 @@ function rearrangeExistingElements(post) {
     nameBlock.parentNode.insertBefore(dateTime, nameBlock);
 
     // wrap postInfo in headerCol div.
-    headerCol.classList.add("headerCol");
     headerCol.appendChild(postInfo);
     post.insertBefore(headerCol, postMessage);
 
     // wrap postMessage text inside new commentText span.
-    var commentBody = document.createElement("div");
+    var commentBody = newElem("div", "commentBody");
     var pmParent = postMessage.parentNode;
-    commentBody.classList.add("commentBody");
     commentBody.appendChild(postMessage);
     pmParent.appendChild(commentBody);
 
@@ -58,8 +144,7 @@ function rearrangeExistingElements(post) {
     // if post has an image, create imageHighlight, then nest filethumb inside
     // imageHighlight, inside headerCol. Move postInfo inside imageHighlight.
     if (fileThumb !== null) {
-        var imageHighlight = document.createElement("div");
-        imageHighlight.classList.add("imageHighlight");
+        var imageHighlight = newElem("div", "imageHighlight");
         imageHighlight.appendChild(postInfo);
         imageHighlight.appendChild(fileThumb);
         headerCol.appendChild(imageHighlight);
@@ -67,44 +152,15 @@ function rearrangeExistingElements(post) {
 }
 
 function addLinkBox(post, type, contents) {
-    var box = document.createElement("a");
-    box.classList.add("linkBox");
-    box.classList.add(type);
+    var box = newElem("a", "linkBox", type);
     box.textContent = contents;
 
     var postMessage = post.querySelector("div.commentBody");
     post.insertBefore(box, postMessage);
 }
 
-function sanitizeQuoteLinks(post) {
-    var msg = post.querySelector("blockquote.postMessage");
-    var quoteLink = /<a href="#p(\d+)" class="quotelink">.*<\/a>/;
-    var htmlWhitespace = /(?:\s*<br>\s*)*/;
-
-    var re = new RegExp(quoteLink.source + htmlWhitespace.source);
-    var match = msg.innerHTML.match(re);
-
-    if (match === null) {
-        return;
-    }
-
-    msg.innerHTML = msg.innerHTML.replace(match[0], "");
-    var target = post.querySelector("a.replyTarget");
-    target.textContent = idMap[match[1]];
-}
-
 function getGlobalId(post) {
     return post.getAttribute("id").match(/\d+/);
-}
-
-function modifyPost(post, idx) {
-    var gid = getGlobalId(post);
-    idMap[gid] = idx;
-
-    rearrangeExistingElements(post);
-    addLinkBox(post, "postNo", idx);
-    addLinkBox(post, "replyTarget", "");
-    sanitizeQuoteLinks(post);
 }
 
 function demoteOp() {
@@ -117,11 +173,10 @@ function demoteOp() {
 }
 
 function main() {
-    demoteOp();
-
-    var posts = document.querySelectorAll("div.post");
-    for (var i = 0; i < posts.length; i++) {
-        modifyPost(posts[i], i+1);
+    var threads = document.querySelectorAll("div.thread");
+    for (var i = 0; i < threads.length; i++) {
+        var thread = newThread(threads[i]);
+        thread.modifyStructure();
     }
 }
 
