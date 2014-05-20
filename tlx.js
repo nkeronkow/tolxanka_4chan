@@ -26,7 +26,7 @@ function rearrangeExistingElements(post) {
     var postertrip  = postInfo.querySelector("span.postertrip");
 
     // Do not display names for "Anonymous" posters or tripcode users.
-    if (name.textContent === "Anonymous" || postertrip.textContent !== "") {
+    if (name.textContent === "Anonymous" || postertrip !== null) {
         name.style.display = "none";
     }
 
@@ -45,6 +45,7 @@ function rearrangeExistingElements(post) {
     commentBody.appendChild(postMessage);
     pmParent.appendChild(commentBody);
 
+    // move subject line to comment div.
     if (subject !== null) {
         postMessage.parentNode.insertBefore(subject, postMessage);
     }
