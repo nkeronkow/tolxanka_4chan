@@ -56,7 +56,7 @@ function rearrangeExistingElements(post) {
 
     // if post has an image, create imageHighlight, then nest filethumb inside
     // imageHighlight, inside headerCol. Move postInfo inside imageHighlight.
-    if (fileThumb != undefined) {
+    if (fileThumb !== null) {
         var imageHighlight = document.createElement("div");
         imageHighlight.classList.add("imageHighlight");
         imageHighlight.appendChild(postInfo);
