@@ -1,0 +1,142 @@
+@namespace url(http://www.w3.org/1999/xhtml);
+
+@-moz-document domain("boards.4chan.org") {
+   
+    div.postContainer {
+       clear: both;
+       display: table;
+       overflow: hidden;
+       margin-bottom: 0.2em;
+       min-height: 1.5em;
+       width: 100%;
+    }
+    
+    div.headerCol {
+       display: table-cell;
+       width: 14em;
+       max-width: 14em;
+       vertical-align: top;
+       font-size: 0.90em;
+       text-align: right;
+       white-space: nowrap;
+       color: #B58900;
+       border-right: 0.3em solid transparent;
+       font-family: monospace;
+    }
+    
+    div.commentBody {
+       display: table-cell;
+       vertical-align: top;
+       font-size: 1.05em;
+       padding: 0.4em 0.75em;
+       border-left: 0px none;
+       font-family: "liberation sans",sans-serif;
+       margin: 0em;
+        
+       background-color: #D6DAF0;
+       border-right: 1px solid #B7C5D9;
+       border-width: medium 1px 1px medium;
+       border-style: none solid solid none;
+       border-color: -moz-use-text-color #B7C5D9 #B7C5D9 -moz-use-text-color;
+    }
+    
+    blockquote.postMessage {
+       margin: 0em;
+       white-space: pre-line;
+    }
+    
+    a.linkBox {
+       display: table-cell;
+       vertical-align: top;
+       padding-top: 0.5em;
+       
+       text-align: center;
+       width: 2em;
+       border-right: 2px solid;
+       font-family: monospace;
+       background-color: #808080;
+       color: #FFF;
+       padding-left: 0.3em;
+       padding-right: 0.3em;
+        
+       font-size: 0.85em;
+       font-weight: bold;
+       cursor: pointer;
+    }
+    
+    span.commentText {
+       word-wrap: break-word;
+       word-break: break-all;
+       white-space: pre-line;
+    }
+    
+    div.post {
+        max-width: 85em;
+        padding: 0em;
+        margin: 0em;
+        background-color: transparent;
+        border: none;
+    }
+
+    div.imageHighlight {
+       padding: 0.25em 0em;
+       /* background-color: #DED5F0; */
+       /* background-color: #A2AEB2; */
+       /* background-color: #A5A8B4; */
+       background-color: #FFC98E;
+       color: #000;
+    }
+        
+    span.nameBlock, span.postertrip, span.dateTime {
+        display: block;
+        clear: both;
+        float: right;
+    }
+    
+    span.postertrip, span.name {
+        line-height: 0.95em;
+        white-space: normal;
+    }
+    
+
+    div.postInfo {
+        display: block;
+        clear: both;
+        float: right;
+    }
+    
+    a.fileThumb {
+        display: block;
+        clear: both;
+    }
+    
+    span.subject {
+       display: block;
+       color: #0F0C5D;
+       font-weight: bold;
+       font-size: 0.9em;
+    }
+    
+    div.fileText {
+       display: block;
+       padding-bottom: 0.2em;
+       clear: right;
+       color: #808080;
+       font-size: 0.85em;
+    }
+    
+    a.fileThumb img {
+       margin-top: 0.25em;
+       margin-right: 0.75em;
+       border: 1px solid #808080;
+       max-height: 125px;
+       max-width: 125px;
+    }
+    
+    div.postInfo input { display: none; }
+    div.sideArrows { display: none; }
+    span.postNum { display: none; }
+    span.quote { color: #56730B; }
+    
+}
+
