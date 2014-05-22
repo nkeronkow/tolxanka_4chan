@@ -11,8 +11,9 @@
 "use strict";
 
 var Thread = {
+    id: null,
+    html: null,
     idMap: new Object,
-    thread: null,
 
     modifyPost: function(postContainer, idx) {
         var post = postContainer.querySelector("div.post");
@@ -20,42 +21,27 @@ var Thread = {
         this.idMap[gid] = idx;
 
         rearrangeExistingElements(post);
-        addLinkBox(post, "postNo", idx);
-        addLinkBox(post, "replyTarget", "");
+        addLinkColumn(post, idx);
         this.sanitizeQuoteLinks(post);
-    },
-
-    sanitizeQuoteLinks: function(post) {
-        var msg = post.querySelector("blockquote.postMessage");
-        var quoteLink = /<a href="#p(\d+)" class="quotelink">.*?<\/a>/;
-        var htmlWhitespace = /(?:\s*<br>\s*)*/;
-
-        var re = new RegExp(quoteLink.source + htmlWhitespace.source);
-        var match = msg.innerHTML.match(re);
-
-        if (match === null) {
-            return;
-        }
-
-        msg.innerHTML = msg.innerHTML.replace(match[0], "");
-        var target = post.querySelector("a.replyTarget");
-        target.textContent = this.idMap[match[1]];
     },
 
     // modify all posts in thread. if a summary tag is encountered, the index
     // will skip ahead before doing all other posts after the first.
     modifyStructure: function() {
         demoteOp();
-        var posts = this.thread.querySelectorAll("div.postContainer");
-        var summary = this.thread.querySelector("span.summary");
+        var posts = this.html.querySelectorAll("div.postContainer");
+        var summary = this.html.querySelector("span.summary");
         var offset = 1;
+
+        // set thread id to post id of first post.
+        this.id = getGlobalId(posts[0]);
 
         this.modifyPost(posts[0], 1);
 
         if (summary !== null) {
             var summaryBlock = newSummaryBlock(summary.innerHTML);
             posts[1].parentNode.insertBefore(summaryBlock, posts[1]);
-            this.thread.removeChild(summary);
+            this.html.removeChild(summary);
 
             var match = summary.textContent.match(/(\d+) posts?.*omitted./);
             offset += match[1] | 0;
@@ -65,31 +51,83 @@ var Thread = {
             this.modifyPost(posts[i], i + offset);
         }
     },
+
+    sanitizeQuoteLinks: function(post) {
+        var postMessage = post.querySelector("blockquote.postMessage");
+        var replySection = post.querySelector("div.replySection");
+        var links = consumeLinks(postMessage);
+
+        for (var i = 0; i < links.length; i++) {
+            var link = links[i];
+            var match = link.match(/(\d+)?#p(\d+)/);
+
+            if (match[1] && match[1] !== this.id) {
+                this.idMap[link] = "↳";
+            }
+
+            var localId = this.idMap[match[2]];
+            addReplyTarget(replySection, localId);
+        }
+    },
 }
 
-function newThread(thread) {
+var quoteLink = /<a href="(.+?)" class="quotelink">.*?<\/a>/;
+var htmlWhitespace = /(?:\s*?<br>\s*?)*/;
+
+// balls-to-the-wall html parsing with regexes, nyukkah.
+function consumeLinks(msgBody) {
+    var re = new RegExp("^" + quoteLink.source + htmlWhitespace.source);
+    var links = new Array();
+
+    while (true) {
+        var match = msgBody.innerHTML.match(re);
+        if (match === null) {
+            break;
+        }
+
+        msgBody.innerHTML = msgBody.innerHTML.replace(match[0], "");
+        links.push(match[1]);
+    }
+
+    return links;
+}
+
+// generator to retrieve the next group of consecutive quotelinks in a post.
+// ignores html linebreaks.
+function genLinkConsumer(msgBody) {
+    var i = 0;
+
+    return function() {
+        var links = new Array();
+
+        for (var n = msgBody.firstChild; n; n = n.nextSibling) {
+            // alert(n.nodeName);
+
+            if (n.nodeType === Node.ELEMENT_NODE) {
+
+                // alert(n.tagName);
+                if (n.tagName === "A" && n.classList.contains("quotelink")) {
+                    links.push(n.getAttribute("href"));
+                } else if (n.tagName === "BR") {
+                    // do nothing.
+                } else {
+                    break;
+                }
+
+            } else {
+                break
+            }
+
+            msgBody.removeChild(n);
+        }
+        return links;
+    }
+}
+
+function newThread(elem) {
     var t = Object.create(Thread);
-    t.thread = thread;
+    t.html = elem;
     return t;
-}
-
-function newSummaryBlock(content) {
-    var postContainer   = newElem("div",        "postContainer");
-    var post            = newElem("div",        "post");
-    var headerCol       = newElem("div",        "headerCol");
-    var postNo          = newElem("a",          "linkBox", "postNo");
-    var replyTarget     = newElem("a",          "linkBox", "replyTarget");
-    var commentBody     = newElem("div",        "commentBody");
-    var postMessage     = newElem("blockquote", "postMessage");
-    postContainer.classList.add("inlineSummary");
-    postContainer.appendChild(post);
-    post.appendChild(headerCol);
-    post.appendChild(postNo);
-    post.appendChild(replyTarget);
-    post.appendChild(commentBody);
-    commentBody.appendChild(postMessage);
-    postMessage.innerHTML = content;
-    return postContainer;
 }
 
 function newElem(type, className) {
@@ -151,12 +189,40 @@ function rearrangeExistingElements(post) {
     }
 }
 
-function addLinkBox(post, type, contents) {
-    var box = newElem("a", "linkBox", type);
-    box.textContent = contents;
+function addReplyTarget(replySection, targetNo) {
+    var linkWrapper = replySection.querySelector("div.linkWrapper");
+    var replyTarget = newElem("a", "replyTarget", "linkBox");
+    replyTarget.textContent = targetNo;
+    linkWrapper.appendChild(replyTarget);
+}
 
-    var postMessage = post.querySelector("div.commentBody");
-    post.insertBefore(box, postMessage);
+function addLinkColumn(post, idx) {
+    var postNo = newElem("a", "postNo", "linkBox");
+    var replyWrapper = newElem("div", "linkWrapper");
+    var commentBody = post.querySelector("div.commentBody");
+    var replySection = newElem("div", "replySection");
+
+    postNo.textContent = idx;
+    replySection.appendChild(replyWrapper);
+    replySection.appendChild(commentBody);
+    post.appendChild(postNo);
+    post.appendChild(replySection);
+}
+
+function newSummaryBlock(content) {
+    var postContainer   = newElem("div",        "postContainer");
+    var post            = newElem("div",        "post");
+    var headerCol       = newElem("div",        "headerCol");
+    var commentBody     = newElem("div",        "commentBody");
+    var postMessage     = newElem("blockquote", "postMessage");
+    postContainer.classList.add("inlineSummary");
+    postContainer.appendChild(post);
+    post.appendChild(headerCol);
+    post.appendChild(commentBody);
+    commentBody.appendChild(postMessage);
+    postMessage.innerHTML = content;
+    addLinkColumn(post);
+    return postContainer;
 }
 
 function getGlobalId(post) {
