@@ -53,75 +53,94 @@ var Thread = {
     },
 
     sanitizeQuoteLinks: function(post) {
-        var postMessage = post.querySelector("blockquote.postMessage");
+        var original = post.querySelector("blockquote.postMessage");
+        var targetMsg = original;
         var replySection = post.querySelector("div.replySection");
-        var links = consumeLinks(postMessage);
+        var sectionNo = 1;
 
-        for (var i = 0; i < links.length; i++) {
-            var link = links[i];
-            var match = link.match(/(\d+)?#p(\d+)/);
+        replySection.parentNode.removeChild(replySection);
 
-            if (match[1] && match[1] !== this.id) {
-                this.idMap[link] = "↳";
+        while (true) {
+            var links = consumeLinks(original);
+            var content = consumeMessage(original);
+
+            if (links.length === 0 && content.length === 0) {
+                break;
             }
 
-            var localId = this.idMap[match[2]];
-            addReplyTarget(replySection, localId);
+            replySection = addReplySection(post);
+            targetMsg = replySection.querySelector("blockquote.postMessage");
+            content.map(function(n) { targetMsg.appendChild(n) });
+
+            for (var i = 0; i < links.length; i++) {
+                var link = links[i];
+                var match = link.match(/(\d+)?#p(\d+)/);
+
+                if (match[1] && match[1] !== this.id) {
+                    this.idMap[link] = "↳";
+                }
+
+                var localId = this.idMap[match[2]];
+                addReplyTarget(replySection, localId);
+            }
+
+            sectionNo++;
         }
     },
 }
 
-var quoteLink = /<a href="(.+?)" class="quotelink">.*?<\/a>/;
-var htmlWhitespace = /(?:\s*?<br>\s*?)*/;
-
-// balls-to-the-wall html parsing with regexes, nyukkah.
+// generator to retrieve the next group of consecutive quotelinks in a post.
+// ignores html linebreaks.
 function consumeLinks(msgBody) {
-    var re = new RegExp("^" + quoteLink.source + htmlWhitespace.source);
     var links = new Array();
+    var deletionArray = new Array();
+    var n = msgBody.firstChild;
 
-    while (true) {
-        var match = msgBody.innerHTML.match(re);
-        if (match === null) {
-            break;
+    for (; n; n = n.nextSibling) {
+        if (n.nodeType === Node.ELEMENT_NODE) {
+            if (n.tagName === "A" && n.classList.contains("quotelink")) {
+                links.push(n.getAttribute("href"));
+            } else if (n.tagName === "BR") {
+                // do nothing.
+            } else {
+                break;
+            }
+        } else {
+            break
         }
 
-        msgBody.innerHTML = msgBody.innerHTML.replace(match[0], "");
-        links.push(match[1]);
+        deletionArray.push(n);
     }
 
+    // alert("consumeLinks deleting " + deletionArray.length + " nodes.");
+    deletionArray.map(function(n) { msgBody.removeChild(n) });
     return links;
 }
 
-// generator to retrieve the next group of consecutive quotelinks in a post.
-// ignores html linebreaks.
-function genLinkConsumer(msgBody) {
-    var i = 0;
+// Consume all post contents up until a quotelink preceded by two consecutive
+// <br> tags. 
+function consumeMessage(msgBody) {
+    var content = new Array();
+    var deletionArray = new Array();
+    var breaks = 0;
+    var n = msgBody.firstChild;
 
-    return function() {
-        var links = new Array();
-
-        for (var n = msgBody.firstChild; n; n = n.nextSibling) {
-            // alert(n.nodeName);
-
-            if (n.nodeType === Node.ELEMENT_NODE) {
-
-                // alert(n.tagName);
-                if (n.tagName === "A" && n.classList.contains("quotelink")) {
-                    links.push(n.getAttribute("href"));
-                } else if (n.tagName === "BR") {
-                    // do nothing.
-                } else {
-                    break;
-                }
-
-            } else {
-                break
+    for (; n; n = n.nextSibling) {
+        if (n.nodeType === Node.ELEMENT_NODE) {
+            if  (n.tagName === "A" && n.classList.contains("quotelink") && breaks >= 2) {
+                n = n.previousSibling;
+                break;
+            } else if (n.tagName === "BR") {
+                breaks++;
             }
-
-            msgBody.removeChild(n);
         }
-        return links;
+
+        deletionArray.push(n);
+        content.push(n);
     }
+
+    deletionArray.map(function(n) { msgBody.removeChild(n) });
+    return content;
 }
 
 function newThread(elem) {
@@ -194,19 +213,31 @@ function addReplyTarget(replySection, targetNo) {
     var replyTarget = newElem("a", "replyTarget", "linkBox");
     replyTarget.textContent = targetNo;
     linkWrapper.appendChild(replyTarget);
+    return replyTarget;
 }
 
 function addLinkColumn(post, idx) {
     var postNo = newElem("a", "postNo", "linkBox");
-    var replyWrapper = newElem("div", "linkWrapper");
-    var commentBody = post.querySelector("div.commentBody");
-    var replySection = newElem("div", "replySection");
+    var sectionWrapper = newElem("div", "sectionWrapper");
 
     postNo.textContent = idx;
-    replySection.appendChild(replyWrapper);
-    replySection.appendChild(commentBody);
     post.appendChild(postNo);
-    post.appendChild(replySection);
+    post.appendChild(sectionWrapper);
+    addReplySection(post);
+}
+
+function addReplySection(post) {
+    var sectionWrapper  = post.querySelector("div.sectionWrapper");
+    var commentBody     = newElem("div", "commentBody");
+    var replySection    = newElem("div", "replySection");
+    var linkWrapper     = newElem("div", "linkWrapper");
+    var postMessage     = newElem("blockquote", "postMessage");
+    post.appendChild(sectionWrapper);
+    sectionWrapper.appendChild(replySection);
+    replySection.appendChild(linkWrapper);
+    replySection.appendChild(commentBody);
+    commentBody.appendChild(postMessage);
+    return replySection;
 }
 
 function newSummaryBlock(content) {
