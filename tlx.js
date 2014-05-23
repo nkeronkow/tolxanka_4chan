@@ -20,9 +20,9 @@ var Thread = {
         var gid = getGlobalId(post);
         this.idMap[gid] = idx;
 
-        rearrangeExistingElements(post);
         addLinkColumn(post, idx);
         this.sanitizeQuoteLinks(post);
+        rearrangeExistingElements(post);
     },
 
     // modify all posts in thread. if a summary tag is encountered, the index
@@ -86,6 +86,8 @@ var Thread = {
 
             sectionNo++;
         }
+
+        original.parentNode.removeChild(original);
     },
 }
 
@@ -162,8 +164,9 @@ function rearrangeExistingElements(post) {
     var headerCol   = newElem("div", "headerCol");
     var postInfo    = post.querySelector("div.postInfo");
     var fileText    = post.querySelector("div.fileText");
-    var fileThumb   = post.querySelector("a.fileThumb");
-    var postMessage = post.querySelector("blockquote.postMessage");
+    var fileThumb   = post.querySelector(".fileThumb");
+    var linkBox     = post.querySelector("a.linkBox");
+    var commentBody = post.querySelector("div.commentBody");
     var subject     = postInfo.querySelector("span.subject");
     var dateTime    = postInfo.querySelector("span.dateTime");
     var nameBlock   = postInfo.querySelector("span.nameBlock");
@@ -180,22 +183,16 @@ function rearrangeExistingElements(post) {
 
     // wrap postInfo in headerCol div.
     headerCol.appendChild(postInfo);
-    post.insertBefore(headerCol, postMessage);
+    post.insertBefore(headerCol, linkBox);
 
-    // wrap postMessage text inside new commentText span.
-    var commentBody = newElem("div", "commentBody");
-    var pmParent = postMessage.parentNode;
-    commentBody.appendChild(postMessage);
-    pmParent.appendChild(commentBody);
-
-    // move subject line to comment div.
+    // move subject line to commentBody div.
     if (subject !== null) {
-        postMessage.parentNode.insertBefore(subject, postMessage);
+        commentBody.insertBefore(subject, commentBody.firstChild);
     }
 
-    // move image info line to comment div.
+    // move image info line to commentBody div.
     if (fileText !== null) {
-        postMessage.parentNode.insertBefore(fileText, postMessage);
+        commentBody.insertBefore(fileText, commentBody.firstChild);
     }
 
     // if post has an image, create imageHighlight, then nest filethumb inside
