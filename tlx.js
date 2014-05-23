@@ -246,15 +246,14 @@ function newSummaryBlock(content) {
     var postContainer   = newElem("div",        "postContainer");
     var post            = newElem("div",        "post");
     var headerCol       = newElem("div",        "headerCol");
-    var commentBody     = newElem("div",        "commentBody");
-    var postMessage     = newElem("blockquote", "postMessage");
+    var sectionWrapper  = newElem("div",        "sectionWrapper");
     postContainer.classList.add("inlineSummary");
     postContainer.appendChild(post);
     post.appendChild(headerCol);
-    post.appendChild(commentBody);
-    commentBody.appendChild(postMessage);
-    postMessage.innerHTML = content;
+    post.appendChild(sectionWrapper);
+
     addLinkColumn(post);
+    post.querySelector("blockquote.postMessage").innerHTML = content;
     return postContainer;
 }
 
