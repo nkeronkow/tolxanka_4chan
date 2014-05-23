@@ -56,7 +56,7 @@ var Thread = {
         var original = post.querySelector("blockquote.postMessage");
         var targetMsg = original;
         var replySection = post.querySelector("div.replySection");
-        var sectionNo = 1;
+        var sectionNo = 0;
 
         replySection.parentNode.removeChild(replySection);
 
@@ -85,6 +85,11 @@ var Thread = {
             }
 
             sectionNo++;
+        }
+
+        // add empty reply section for textless posts.
+        if (sectionNo === 0) {
+            replySection = addReplySection(post);
         }
 
         original.parentNode.removeChild(original);
