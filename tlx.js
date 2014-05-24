@@ -74,14 +74,18 @@ var Thread = {
 
             for (var i = 0; i < links.length; i++) {
                 var link = links[i];
-                var match = link.match(/(\d+)?#p(\d+)/);
+                if (link === "DEAD_LINK") {
+                    addReplyTarget(replySection, "✖");
+                } else {
+                    var match = link.match(/(\d+)?#p(\d+)/);
 
-                if (match[1] && match[1] !== this.id) {
-                    this.idMap[link] = "↳";
+                    if (match[1] && match[1] !== this.id) {
+                        this.idMap[link] = "↳";
+                    }
+
+                    var localId = this.idMap[match[2]];
+                    addReplyTarget(replySection, localId);
                 }
-
-                var localId = this.idMap[match[2]];
-                addReplyTarget(replySection, localId);
             }
 
             sectionNo++;
@@ -107,6 +111,11 @@ function consumeLinks(msgBody) {
         if (n.nodeType === Node.ELEMENT_NODE) {
             if (n.tagName === "A" && n.classList.contains("quotelink")) {
                 links.push(n.getAttribute("href"));
+            } else if (n.tagName === "SPAN" &&
+                            n.classList.contains("deadlink")) {
+
+                links.push("DEAD_LINK");
+
             } else if (n.tagName === "BR") {
                 // do nothing.
             } else {
@@ -119,13 +128,63 @@ function consumeLinks(msgBody) {
         deletionArray.push(n);
     }
 
-    // alert("consumeLinks deleting " + deletionArray.length + " nodes.");
     deletionArray.map(function(n) { msgBody.removeChild(n) });
     return links;
 }
 
 // Consume all post contents up until a quotelink preceded by two consecutive
-// <br> tags. 
+// <br> tags. Remove any trailing <br> tags at the end.
+function consumeMessage(msgBody) {
+    var content = new Array();
+    var deletionArray = new Array();
+    var nextLinkCluster = new Array();
+    var breaks = 0;
+    var n = msgBody.firstChild;
+
+    for (; n; n = n.nextSibling) {
+        if (n.nodeType === Node.ELEMENT_NODE) {
+            if  (n.tagName === "A" && n.classList.contains("quotelink") && breaks >= 2) {
+                nextLinkCluster.push(n);
+                continue;
+            } else if (n.tagName === "BR") {
+                breaks++;
+            }
+
+        // If new content is found after the next link cluster, ignore what
+        // we've acculumated and break, leaving everything for the future
+        // calls of consumeXXXX functions.
+        } else if (nextLinkCluster.length > 0 ) {
+            var nextLinkCluster = new Array();
+            break;
+        } else {
+            breaks = 0;
+        }
+
+        deletionArray.push(n);
+        content.push(n);
+    }
+
+    // If we fall off the end and nextLinkCluster has any contents, this post
+    // has trailing links. The poster is not replying to these but is instead
+    // only citing them. Treat them as normal content.
+    if (nextLinkCluster.length > 0) {
+        deletionArray = deletionArray.concat(nextLinkCluster);
+        content = content.concat(nextLinkCluster);
+    }
+
+    while   (content.length > 0 &&
+                content[content.length - 1].nodeType === Node.ELEMENT_NODE &&
+                    content[content.length - 1].tagName === "BR") {
+        content.pop();
+    }
+
+    deletionArray.map(function(n) { msgBody.removeChild(n) });
+    return content;
+}
+
+/*
+// Consume all post contents up until a quotelink preceded by two consecutive
+// <br> tags. Remove any trailing <br> tags at the end.
 function consumeMessage(msgBody) {
     var content = new Array();
     var deletionArray = new Array();
@@ -140,15 +199,24 @@ function consumeMessage(msgBody) {
             } else if (n.tagName === "BR") {
                 breaks++;
             }
+        } else {
+            breaks = 0;
         }
 
         deletionArray.push(n);
         content.push(n);
     }
 
+    while   (content.length > 0 &&
+                content[content.length - 1].nodeType === Node.ELEMENT_NODE &&
+                    content[content.length - 1].tagName === "BR") {
+        content.pop();
+    }
+
     deletionArray.map(function(n) { msgBody.removeChild(n) });
     return content;
 }
+*/
 
 function newThread(elem) {
     var t = Object.create(Thread);
