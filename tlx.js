@@ -14,10 +14,11 @@ var Thread = {
     id: null,
     html: null,
     idMap: new Object,
+    nextColor: makeColorGenerator(),
 
     modifyPost: function(postContainer, idx) {
         var post = postContainer.querySelector("div.post");
-        var gid = getGlobalId(post);
+        var gid = getGlobalID(post);
         this.idMap[gid] = idx;
 
         addLinkColumn(post, idx);
@@ -34,7 +35,7 @@ var Thread = {
         var offset = 1;
 
         // set thread id to post id of first post.
-        this.id = getGlobalId(posts[0]);
+        this.id = getGlobalID(posts[0]).match(/\d+/);
 
         this.modifyPost(posts[0], 1);
 
@@ -74,17 +75,10 @@ var Thread = {
 
             for (var i = 0; i < links.length; i++) {
                 var link = links[i];
-                if (link === "DEAD_LINK") {
-                    addReplyTarget(replySection, "✖");
-                } else {
-                    var match = link.match(/(\d+)?#p(\d+)/);
+                var target = this.processLink(replySection, link);
 
-                    if (match[1] && match[1] !== this.id) {
-                        this.idMap[link] = "↳";
-                    }
-
-                    var localId = this.idMap[match[2]];
-                    addReplyTarget(replySection, localId);
+                if (target) {
+                    this.annotateParentPost(getPostByGlobal(target), post);
                 }
             }
 
@@ -98,10 +92,77 @@ var Thread = {
 
         original.parentNode.removeChild(original);
     },
+
+    processLink: function(replySection, link) {
+        if (link === "DEAD_LINK") {
+            addReplyTarget(replySection, "✖");
+            return;
+        }
+        
+       var match = link.match(/.*?(\d+)?#(.+)/);
+       if (!match) {
+           return;
+       }
+
+        var globalID = match[2];
+        var localID = this.idMap[globalID];
+        var color = null;
+
+        if (match[1] == this.id && !localID) {
+            localID = "↑";
+            this.idMap[globalID] = localID;
+            var replyTarget = addReplyTarget(replySection, localID, match[0]);
+        } else {
+            var replyTarget = addReplyTarget(replySection, localID, match[0]);
+            color = this.getPostColor(getPostByGlobal(globalID));
+            replyTarget.style.backgroundColor = color;
+            replyTarget.style.color = "black";
+        }
+
+        return match[2];
+    },
+
+    annotateParentPost: function(target, reply) {
+        var replyID = getGlobalID(reply);
+
+        if (!target) {
+            return;
+        }
+
+        var replyLocalID = this.idMap[replyID];
+        var replyLink = newElem("a", "reply_link");
+        var postMessage = target.querySelector("blockquote.postMessage");
+        replyLink.setAttribute("href", "#" + replyID);
+        replyLink.textContent = "→" + replyLocalID;
+        postMessage.appendChild(replyLink);
+
+    },
+
+    getPostColor: function(post) {
+        if (!post) {
+            return;
+        }
+
+        var postNo = post.querySelector("a.postNo");
+        var color = postNo.getAttribute("data-color");
+        if (color) {
+            return color;
+        }
+        
+        color = this.nextColor();
+        postNo.setAttribute("data-color", color);
+        postNo.style.backgroundColor = color;
+        postNo.style.color = "black";
+        return color;
+    },
+}
+
+function getPostByGlobal(targetID) {
+    return document.querySelector("div#" + targetID);
 }
 
 // generator to retrieve the next group of consecutive quotelinks in a post.
-// ignores html linebreaks.
+// ignores html linebreaks. Always interpret board redirects as message text.
 function consumeLinks(msgBody) {
     var links = new Array();
     var deletionArray = new Array();
@@ -110,7 +171,13 @@ function consumeLinks(msgBody) {
     for (; n; n = n.nextSibling) {
         if (n.nodeType === Node.ELEMENT_NODE) {
             if (n.tagName === "A" && n.classList.contains("quotelink")) {
-                links.push(n.getAttribute("href"));
+
+                var href = n.getAttribute("href");
+                if (href.match(/^\/(?:.+?)\/$/)) {
+                    break;
+                }
+                links.push(href);
+
             } else if (n.tagName === "SPAN" &&
                             n.classList.contains("deadlink")) {
 
@@ -122,7 +189,7 @@ function consumeLinks(msgBody) {
                 break;
             }
         } else {
-            break
+            break;
         }
 
         deletionArray.push(n);
@@ -143,7 +210,7 @@ function consumeMessage(msgBody) {
 
     for (; n; n = n.nextSibling) {
         if (n.nodeType === Node.ELEMENT_NODE) {
-            if  (n.tagName === "A" && n.classList.contains("quotelink") && breaks >= 2) {
+            if  (n.tagName === "A" && n.classList.contains("quotelink") && breaks >= 1) {
                 nextLinkCluster.push(n);
                 continue;
             } else if (n.tagName === "BR") {
@@ -182,46 +249,29 @@ function consumeMessage(msgBody) {
     return content;
 }
 
-/*
-// Consume all post contents up until a quotelink preceded by two consecutive
-// <br> tags. Remove any trailing <br> tags at the end.
-function consumeMessage(msgBody) {
-    var content = new Array();
-    var deletionArray = new Array();
-    var breaks = 0;
-    var n = msgBody.firstChild;
-
-    for (; n; n = n.nextSibling) {
-        if (n.nodeType === Node.ELEMENT_NODE) {
-            if  (n.tagName === "A" && n.classList.contains("quotelink") && breaks >= 2) {
-                n = n.previousSibling;
-                break;
-            } else if (n.tagName === "BR") {
-                breaks++;
-            }
-        } else {
-            breaks = 0;
-        }
-
-        deletionArray.push(n);
-        content.push(n);
-    }
-
-    while   (content.length > 0 &&
-                content[content.length - 1].nodeType === Node.ELEMENT_NODE &&
-                    content[content.length - 1].tagName === "BR") {
-        content.pop();
-    }
-
-    deletionArray.map(function(n) { msgBody.removeChild(n) });
-    return content;
-}
-*/
-
 function newThread(elem) {
     var t = Object.create(Thread);
     t.html = elem;
     return t;
+}
+
+function makeColorGenerator() {
+    var hsl = {
+        hue:        0,
+        saturation: 90,
+        lightness:  70,
+
+        toString: function() {
+            return "hsl(" + this.hue + ", " +
+                    this.saturation + "%, " +
+                    this.lightness + "%)";
+        },
+    }
+
+    return function() {
+        hsl.hue = (hsl.hue + 59) % 360;
+        return hsl.toString();
+    }
 }
 
 function newElem(type, className) {
@@ -278,22 +328,37 @@ function rearrangeExistingElements(post) {
     }
 }
 
-function addReplyTarget(replySection, targetNo) {
+function addReplyTarget(replySection, localId, href) {
     var linkWrapper = replySection.querySelector("div.linkWrapper");
     var replyTarget = newElem("a", "replyTarget", "linkBox");
-    replyTarget.textContent = targetNo;
+    replyTarget.textContent = localId;
+    replyTarget.setAttribute("href", href);
     linkWrapper.appendChild(replyTarget);
+
     return replyTarget;
 }
 
 function addLinkColumn(post, idx) {
     var postNo = newElem("a", "postNo", "linkBox");
     var sectionWrapper = newElem("div", "sectionWrapper");
+    
+    if (post.getAttribute("id") !== null) {
+        var globalId = post.getAttribute("id").match(/\d+/);
+        postNo.addEventListener("click", makeQuoteHandler(globalId), true);
+    }
 
     postNo.textContent = idx;
     post.appendChild(postNo);
     post.appendChild(sectionWrapper);
     addReplySection(post);
+}
+
+function makeQuoteHandler(globalId) {
+    return function () {
+        var comment = document.querySelector("textarea[name=com]");
+        var quote = ">>" + globalId + "\n";
+        comment.value += quote;
+    }
 }
 
 function addReplySection(post) {
@@ -325,8 +390,8 @@ function newSummaryBlock(content) {
     return postContainer;
 }
 
-function getGlobalId(post) {
-    return post.getAttribute("id").match(/\d+/);
+function getGlobalID(post) {
+    return post.getAttribute("id");
 }
 
 function demoteOp() {
