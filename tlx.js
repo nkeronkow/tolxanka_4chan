@@ -14,6 +14,7 @@ var Thread = {
     id: null,
     html: null,
     idMap: new Object,
+    prefix: "",
     nextColor: makeColorGenerator(),
 
     modifyPost: function(postContainer, idx) {
@@ -21,7 +22,7 @@ var Thread = {
         var gid = getGlobalID(post);
         this.idMap[gid] = idx;
 
-        addLinkColumn(post, idx);
+        addLinkColumn(post, idx, this.prefix, gid);
         this.sanitizeQuoteLinks(post);
         rearrangeExistingElements(post);
     },
@@ -33,9 +34,6 @@ var Thread = {
         var posts = this.html.querySelectorAll("div.postContainer");
         var summary = this.html.querySelector("span.summary");
         var offset = 1;
-
-        // set thread id to post id of first post.
-        this.id = getGlobalID(posts[0]).match(/\d+/);
 
         this.modifyPost(posts[0], 1);
 
@@ -130,11 +128,16 @@ var Thread = {
         }
 
         var replyLocalID = this.idMap[replyID];
-        var replyLink = newElem("a", "reply_link");
-        var postMessage = target.querySelector("blockquote.postMessage");
+        var replyLink = newElem("a", "replyLink");
+        var responseList = target.querySelector("div.responseList");
+        if (!responseList) {
+            responseList = newElem("div", "responseList");
+            target.appendChild(responseList);
+        }
+
         replyLink.setAttribute("href", "#" + replyID);
         replyLink.textContent = "→" + replyLocalID;
-        postMessage.appendChild(replyLink);
+        responseList.appendChild(replyLink);
 
     },
 
@@ -252,14 +255,22 @@ function consumeMessage(msgBody) {
 function newThread(elem) {
     var t = Object.create(Thread);
     t.html = elem;
+
+    var posts = t.html.querySelectorAll("div.postContainer");
+    t.id = getGlobalID(posts[0]).match(/\d+/);
+
+    if (document.URL.indexOf("/thread/") == -1) {
+        t.prefix = document.URL + "thread/" + t.id;
+    }
+
     return t;
 }
 
 function makeColorGenerator() {
     var hsl = {
         hue:        0,
-        saturation: 90,
-        lightness:  70,
+        saturation: 50,
+        lightness:  80,
 
         toString: function() {
             return "hsl(" + this.hue + ", " +
@@ -269,7 +280,7 @@ function makeColorGenerator() {
     }
 
     return function() {
-        hsl.hue = (hsl.hue + 59) % 360;
+        hsl.hue = (hsl.hue + 113) % 360;
         return hsl.toString();
     }
 }
@@ -338,13 +349,13 @@ function addReplyTarget(replySection, localId, href) {
     return replyTarget;
 }
 
-function addLinkColumn(post, idx) {
+function addLinkColumn(post, idx, prefix, gid) {
     var postNo = newElem("a", "postNo", "linkBox");
     var sectionWrapper = newElem("div", "sectionWrapper");
     
-    if (post.getAttribute("id") !== null) {
-        var globalId = post.getAttribute("id").match(/\d+/);
-        postNo.addEventListener("click", makeQuoteHandler(globalId), true);
+    if (gid) {
+        postNo.addEventListener("click", makeQuoteHandler(gid), true);
+        postNo.setAttribute("href", prefix + "#" + gid);
     }
 
     postNo.textContent = idx;
@@ -352,6 +363,7 @@ function addLinkColumn(post, idx) {
     post.appendChild(sectionWrapper);
     addReplySection(post);
 }
+
 
 function makeQuoteHandler(globalId) {
     return function () {
@@ -385,7 +397,7 @@ function newSummaryBlock(content) {
     post.appendChild(headerCol);
     post.appendChild(sectionWrapper);
 
-    addLinkColumn(post);
+    addLinkColumn(post, null, null, null);
     post.querySelector("blockquote.postMessage").innerHTML = content;
     return postContainer;
 }
